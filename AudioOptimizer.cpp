@@ -124,6 +124,10 @@ static const wchar_t* kAudioServices[] = {
 #define ENDPOINT_SYSFX_DISABLED 0x00000001
 #endif
 
+static bool MmDevicePropertiesPath(const DeviceInfo& device, std::wstring* path);
+static HRESULT GetEndpointVolumeState(const DeviceInfo& device, float* volume, BOOL* mute);
+static std::wstring GetVolumeText(const DeviceInfo& device);
+
 template <class T>
 static void SafeRelease(T** value) {
     if (*value) {
@@ -454,6 +458,24 @@ static std::wstring GetSysFxText(const DeviceInfo& device) {
     SafeRelease(&store);
     SafeRelease(&endpoint);
     SafeRelease(&enumerator);
+
+    std::wstring path;
+    if (MmDevicePropertiesPath(device, &path)) {
+        HKEY key = nullptr;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+            DWORD regValue = 0, type = 0, bytes = sizeof(DWORD);
+            if (RegQueryValueExW(key, L"{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5", nullptr, &type,
+                reinterpret_cast<BYTE*>(&regValue), &bytes) == ERROR_SUCCESS && type == REG_DWORD) {
+                std::wstring regText = regValue == ENDPOINT_SYSFX_DISABLED ? L"disabled" : L"enabled";
+                if (text == L"unknown" || text == L"driver default" || text.rfind(L"unavailable:", 0) == 0) {
+                    text = regText + L" (registry fallback/pending restart)";
+                } else if (text != regText) {
+                    text += L"; registry says " + regText + L" pending restart";
+                }
+            }
+            RegCloseKey(key);
+        }
+    }
     return text;
 }
 
@@ -637,6 +659,11 @@ static void AddHighlightedFromList(HWND list, std::vector<DeviceInfo>& source, s
     }
 }
 
+static void AddFirstHighlightedFromList(HWND list, std::vector<DeviceInfo>& source, std::vector<DeviceInfo*>& selected) {
+    int index = ListView_GetNextItem(list, -1, LVNI_SELECTED);
+    if (index >= 0 && index < static_cast<int>(source.size())) selected.push_back(&source[index]);
+}
+
 static std::vector<DeviceInfo*> SelectedDevices() {
     std::vector<DeviceInfo*> selected;
     AddCheckedFromList(g.outputs, g.outputDevices, selected);
@@ -646,6 +673,16 @@ static std::vector<DeviceInfo*> SelectedDevices() {
         AddHighlightedFromList(g.inputs, g.inputDevices, selected);
     }
     return selected;
+}
+
+static std::vector<DeviceInfo*> DisplayDevices() {
+    std::vector<DeviceInfo*> display;
+    AddFirstHighlightedFromList(g.outputs, g.outputDevices, display);
+    AddFirstHighlightedFromList(g.inputs, g.inputDevices, display);
+    if (!display.empty()) return display;
+    AddCheckedFromList(g.outputs, g.outputDevices, display);
+    AddCheckedFromList(g.inputs, g.inputDevices, display);
+    return display;
 }
 
 static std::vector<DeviceInfo*> AllDevices() {
@@ -707,14 +744,24 @@ static void SyncFormatControlsFromDevice(const DeviceInfo& device) {
     SelectCombo(g.channels, buffer);
 }
 
+static void SyncVolumeControlsFromDevice(const DeviceInfo& device) {
+    float volume = 0.0f;
+    BOOL mute = FALSE;
+    if (SUCCEEDED(GetEndpointVolumeState(device, &volume, &mute))) {
+        SendMessageW(g.volume, TBM_SETPOS, TRUE, static_cast<LPARAM>(volume * 100.0f + 0.5f));
+        SendMessageW(g.mute, BM_SETCHECK, mute ? BST_CHECKED : BST_UNCHECKED, 0);
+    }
+}
+
 static void UpdateSelectedConfig() {
     if (!g.config) return;
-    std::vector<DeviceInfo*> selected = SelectedDevices();
+    std::vector<DeviceInfo*> selected = DisplayDevices();
+    std::vector<DeviceInfo*> targets = SelectedDevices();
     std::wstringstream ss;
     if (selected.empty()) {
-        ss << L"Select one or more devices to see current configuration.";
+        ss << L"Check one or more devices to target actions, or highlight a row to inspect current configuration.";
     } else {
-        ss << selected.size() << L" selected device(s)\r\n";
+        ss << selected.size() << L" displayed device(s); " << targets.size() << L" checked action target(s)\r\n";
         int shown = 0;
         for (DeviceInfo* device : selected) {
             if (shown >= 4) {
@@ -726,11 +773,13 @@ static void UpdateSelectedConfig() {
             ss << L"  Device format: " << GetCurrentDeviceFormatText(*device) << L"\r\n";
             ss << L"  Mix format: " << GetMixFormatText(*device) << L"\r\n";
             ss << L"  Current latency: " << GetLatencyText(*device) << L"\r\n";
+            ss << L"  Volume: " << GetVolumeText(*device) << L"\r\n";
             ss << L"  System effects/APO: " << GetSysFxText(*device) << L"\r\n";
             ss << L"  Exclusive mode: " << GetExclusiveModeText(*device) << L"\r\n";
             ++shown;
         }
         SyncFormatControlsFromDevice(*selected.front());
+        SyncVolumeControlsFromDevice(*selected.front());
     }
     SetWindowTextW(g.config, ss.str().c_str());
 }
@@ -749,6 +798,33 @@ static HRESULT SetEndpointVolume(const DeviceInfo& device, float volume, bool mu
     SafeRelease(&endpoint);
     SafeRelease(&enumerator);
     return hr;
+}
+
+static HRESULT GetEndpointVolumeState(const DeviceInfo& device, float* volume, BOOL* mute) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    IMMDevice* endpoint = nullptr;
+    IAudioEndpointVolume* endpointVolume = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+        __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (SUCCEEDED(hr)) hr = enumerator->GetDevice(device.id.c_str(), &endpoint);
+    if (SUCCEEDED(hr)) hr = endpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&endpointVolume));
+    if (SUCCEEDED(hr) && volume) hr = endpointVolume->GetMasterVolumeLevelScalar(volume);
+    if (SUCCEEDED(hr) && mute) hr = endpointVolume->GetMute(mute);
+    SafeRelease(&endpointVolume);
+    SafeRelease(&endpoint);
+    SafeRelease(&enumerator);
+    return hr;
+}
+
+static std::wstring GetVolumeText(const DeviceInfo& device) {
+    float volume = 0.0f;
+    BOOL mute = FALSE;
+    HRESULT hr = GetEndpointVolumeState(device, &volume, &mute);
+    if (FAILED(hr)) return L"unavailable: " + HrText(hr);
+    std::wstringstream ss;
+    ss << static_cast<int>(volume * 100.0f + 0.5f) << L"%";
+    if (mute) ss << L" (muted)";
+    return ss.str();
 }
 
 static void ApplyVolumeToSelected() {
@@ -1236,12 +1312,15 @@ static void SetSysFxForSelected(bool disabled) {
     }
     for (DeviceInfo* device : devices) {
         HRESULT hr = SetEndpointSysFx(*device, disabled);
+        bool usedFallback = false;
         if (FAILED(hr)) {
             Log(L"Driver rejected direct effects change for " + device->name + L": " + HrText(hr) + L". Trying registry fallback.");
             hr = SetEndpointSysFxRegistryFallback(*device, disabled);
+            usedFallback = SUCCEEDED(hr);
         }
         if (SUCCEEDED(hr)) {
-            Log(std::wstring(disabled ? L"System effects disabled for: " : L"System effects enabled for: ") + device->name);
+            Log(std::wstring(disabled ? L"System effects disabled for: " : L"System effects enabled for: ") + device->name +
+                (usedFallback ? L" (registry fallback written; restart audio services or reboot if driver does not update immediately)" : L""));
         } else {
             Log(L"System effects are not supported or are driver-locked for " + device->name + L": " + HrText(hr));
         }

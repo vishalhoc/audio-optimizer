@@ -31,6 +31,7 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "powrprof.lib")
+#pragma comment(lib, "gdi32.lib")
 
 // Undocumented but widely used Windows endpoint policy interface. It is needed
 // because the public Core Audio API can enumerate devices but cannot change the
@@ -79,6 +80,9 @@ enum ControlId {
     IDC_UI_DELAY_APPLY, IDC_UI_DELAY_RESTORE,
     IDC_RESTORE_ALL_TWEAKS, IDC_REFRESH_CONFIG,
     IDC_HIDE_SELECTED_DEVICES, IDC_SHOW_SELECTED_DEVICES
+    , IDC_CRACKLE_SAFE_SELECTED, IDC_CRACKLE_SAFE_ALL, IDC_CRACKLE_AGGRESSIVE,
+    IDC_AUDIO_TROUBLESHOOTER, IDC_DEVICE_MANAGER, IDC_SERVICES_PANEL,
+    IDC_BLUETOOTH_SETTINGS, IDC_OPEN_LOG, IDC_CLEAR_LOG, IDC_EXPORT_DEBUG
 };
 
 struct DeviceInfo {
@@ -100,6 +104,13 @@ struct AppState {
     HWND mute = nullptr;
     HWND config = nullptr;
     HWND tabs = nullptr;
+    HWND status = nullptr;
+    HFONT font = nullptr;
+    HFONT fontBold = nullptr;
+    HFONT fontTitle = nullptr;
+    HBRUSH brushWindow = nullptr;
+    HBRUSH brushPanel = nullptr;
+    HBRUSH brushEdit = nullptr;
     std::vector<DeviceInfo> outputDevices;
     std::vector<DeviceInfo> inputDevices;
     std::vector<HWND> deviceTabControls;
@@ -116,6 +127,18 @@ static const wchar_t* kAudioServices[] = {
     L"AudioEndpointBuilder",
     L"MMCSS"
 };
+
+static const COLORREF kColorWindow = RGB(244, 247, 250);
+static const COLORREF kColorPanel = RGB(255, 255, 255);
+static const COLORREF kColorText = RGB(28, 35, 43);
+static const COLORREF kColorMuted = RGB(88, 99, 112);
+static const COLORREF kColorBorder = RGB(198, 207, 217);
+static const COLORREF kColorPrimary = RGB(0, 99, 177);
+static const COLORREF kColorPrimaryHover = RGB(0, 115, 204);
+static const COLORREF kColorSuccess = RGB(22, 128, 83);
+static const COLORREF kColorWarning = RGB(178, 102, 0);
+static const COLORREF kColorDanger = RGB(190, 53, 53);
+static const COLORREF kColorNeutral = RGB(232, 238, 245);
 
 #ifndef ENDPOINT_SYSFX_ENABLED
 #define ENDPOINT_SYSFX_ENABLED 0x00000000
@@ -149,15 +172,89 @@ static std::wstring HrText(HRESULT hr) {
     return ss.str();
 }
 
+static std::wstring ExeDirectoryPath() {
+    wchar_t path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    std::wstring full = path;
+    size_t slash = full.find_last_of(L"\\/");
+    return slash == std::wstring::npos ? L"." : full.substr(0, slash);
+}
+
+static std::wstring LogFilePath() {
+    return ExeDirectoryPath() + L"\\AudioOptimizer.log";
+}
+
+static std::wstring NowText() {
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    wchar_t buffer[64]{};
+    StringCchPrintfW(buffer, 64, L"%04u-%02u-%02u %02u:%02u:%02u.%03u",
+        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    return buffer;
+}
+
+static void WriteLogFile(const std::wstring& line) {
+    std::wstring path = LogFilePath();
+    HANDLE file = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(file, &size) && size.QuadPart == 0) {
+        const char bom[] = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF) };
+        DWORD written = 0;
+        WriteFile(file, bom, sizeof(bom), &written, nullptr);
+    }
+
+    std::wstring withBreak = line + L"\r\n";
+    int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, withBreak.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (bytesNeeded > 1) {
+        std::vector<char> utf8(bytesNeeded);
+        WideCharToMultiByte(CP_UTF8, 0, withBreak.c_str(), -1, utf8.data(), bytesNeeded, nullptr, nullptr);
+        DWORD written = 0;
+        WriteFile(file, utf8.data(), bytesNeeded - 1, &written, nullptr);
+    }
+    CloseHandle(file);
+}
+
+static void SetStatus(const std::wstring& text) {
+    if (g.status) {
+        SetWindowTextW(g.status, text.c_str());
+    }
+}
+
 static void Log(const std::wstring& text) {
-    int len = GetWindowTextLengthW(g.log);
-    SendMessageW(g.log, EM_SETSEL, len, len);
-    std::wstring line = text + L"\r\n";
-    SendMessageW(g.log, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(line.c_str()));
+    std::wstring stamped = L"[" + NowText() + L"] " + text;
+    if (g.log) {
+        int len = GetWindowTextLengthW(g.log);
+        SendMessageW(g.log, EM_SETSEL, len, len);
+        std::wstring line = stamped + L"\r\n";
+        SendMessageW(g.log, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(line.c_str()));
+    }
+    WriteLogFile(stamped);
+    SetStatus(text);
+}
+
+static HFONT MakeUiFont(int pointSize, int weight) {
+    HDC dc = GetDC(nullptr);
+    int height = -MulDiv(pointSize, GetDeviceCaps(dc, LOGPIXELSY), 72);
+    ReleaseDC(nullptr, dc);
+    return CreateFontW(height, 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+}
+
+static void InitVisuals() {
+    g.font = MakeUiFont(9, FW_NORMAL);
+    g.fontBold = MakeUiFont(9, FW_SEMIBOLD);
+    g.fontTitle = MakeUiFont(12, FW_SEMIBOLD);
+    g.brushWindow = CreateSolidBrush(kColorWindow);
+    g.brushPanel = CreateSolidBrush(kColorPanel);
+    g.brushEdit = CreateSolidBrush(RGB(249, 251, 253));
 }
 
 static void TrackControl(HWND hwnd) {
     if (!hwnd) return;
+    if (g.font) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g.font), TRUE);
     if (g.createTab == 1) {
         g.tweakTabControls.push_back(hwnd);
     } else if (g.createTab == 2) {
@@ -242,6 +339,9 @@ static void AddDeviceToList(HWND list, const DeviceInfo& info) {
 
 static void InitDeviceList(HWND list) {
     ListView_SetExtendedListViewStyle(list, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+    ListView_SetBkColor(list, RGB(250, 252, 255));
+    ListView_SetTextBkColor(list, RGB(250, 252, 255));
+    ListView_SetTextColor(list, kColorText);
     LVCOLUMNW col{};
     col.mask = LVCF_TEXT | LVCF_WIDTH;
     col.cx = 480;
@@ -513,9 +613,13 @@ static void ApplyFormatToList(const std::vector<DeviceInfo>& devices, const wcha
     Log(start.str());
 
     WAVEFORMATEXTENSIBLE format = MakeFormat(sampleRate, bits, channels);
+    int updated = 0;
+    int skipped = 0;
+    int failed = 0;
     for (const auto& device : devices) {
         if (device.state != DEVICE_STATE_ACTIVE) {
             Log(L"Skipped inactive device: " + device.name);
+            ++skipped;
             continue;
         }
         WAVEFORMATEX* closest = nullptr;
@@ -532,10 +636,16 @@ static void ApplyFormatToList(const std::vector<DeviceInfo>& devices, const wcha
         HRESULT hr = SetDeviceFormat(device, sampleRate, bits, channels);
         if (SUCCEEDED(hr)) {
             Log(L"Updated: " + device.name);
+            ++updated;
         } else {
             Log(L"Windows rejected this endpoint format for " + device.name + L": " + HrText(hr));
+            ++failed;
         }
     }
+    std::wstringstream done;
+    done << L"Format apply summary for " << label << L": updated " << updated
+         << L", skipped " << skipped << L", failed " << failed << L".";
+    Log(done.str());
     UpdateSelectedConfig();
 }
 
@@ -1411,8 +1521,301 @@ static void RestoreUiDelayTweak() {
     RestoreRegValue(HKEY_CURRENT_USER, L"Control Panel\\Desktop", L"MenuShowDelay");
 }
 
+static void SetSysFxForDevices(const std::vector<DeviceInfo*>& devices, bool disabled) {
+    if (devices.empty()) {
+        Log(L"Select/check one or more devices before changing system effects.");
+        return;
+    }
+    for (DeviceInfo* device : devices) {
+        HRESULT hr = SetEndpointSysFx(*device, disabled);
+        bool usedFallback = false;
+        if (FAILED(hr)) {
+            Log(L"Driver rejected direct effects change for " + device->name + L": " + HrText(hr) + L". Trying registry fallback.");
+            hr = SetEndpointSysFxRegistryFallback(*device, disabled);
+            usedFallback = SUCCEEDED(hr);
+        }
+        if (SUCCEEDED(hr)) {
+            Log(std::wstring(disabled ? L"System effects disabled for: " : L"System effects enabled for: ") + device->name +
+                (usedFallback ? L" (registry fallback written; restart audio services or reboot if driver does not update immediately)" : L""));
+        } else {
+            Log(L"System effects are not supported or are driver-locked for " + device->name + L": " + HrText(hr));
+        }
+    }
+    UpdateSelectedConfig();
+}
+
+static void ApplyStableFormatToDevices(const std::vector<DeviceInfo*>& devices) {
+    if (devices.empty()) {
+        Log(L"No devices selected for stable format repair.");
+        return;
+    }
+    SelectCombo(g.freq, L"48000");
+    SelectCombo(g.bits, L"24");
+    SelectCombo(g.channels, L"2");
+    int outputs = 0;
+    int inputs = 0;
+    for (DeviceInfo* device : devices) {
+        if (device->flow == eRender) ++outputs;
+        if (device->flow == eCapture) ++inputs;
+        ApplyFormatToDevice(*device);
+    }
+    std::wstringstream ss;
+    ss << L"Stable format repair targeted " << outputs << L" output(s) and " << inputs << L" input(s).";
+    Log(ss.str());
+}
+
+static void CrackleRepairSelected() {
+    std::vector<DeviceInfo*> devices = SelectedDevices();
+    if (devices.empty()) {
+        Log(L"Check one or more devices before running selected crackle repair.");
+        return;
+    }
+    Log(L"Running safe crackle repair for checked devices...");
+    ApplyStableFormatToDevices(devices);
+    SetSysFxForDevices(devices, true);
+    SetRegDwordBacked(HKEY_CURRENT_USER, L"Software\\Microsoft\\Multimedia\\Audio", L"UserDuckingPreference", 3);
+    Log(L"Safe selected crackle repair finished. Test audio, then restart audio services if the driver did not update live.");
+}
+
+static void CrackleRepairAll() {
+    Log(L"Running safe crackle repair for all active endpoints...");
+    SelectCombo(g.freq, L"48000");
+    SelectCombo(g.bits, L"24");
+    SelectCombo(g.channels, L"2");
+    ApplyFormatToList(g.outputDevices, L"outputs");
+    ApplyFormatToList(g.inputDevices, L"inputs");
+    SetSysFxForDevices(AllDevices(), true);
+    SetRegDwordBacked(HKEY_CURRENT_USER, L"Software\\Microsoft\\Multimedia\\Audio", L"UserDuckingPreference", 3);
+    OptimizeAudioServices();
+    Log(L"Safe all-device crackle repair finished.");
+}
+
+static void CrackleRepairAggressive() {
+    if (!Confirm(L"Aggressive Crackle Repair",
+        L"This applies all-device 48 kHz / 24-bit, disables effects, disables exclusive mode for shared stability, applies low-latency power, optimizes audio services, and restarts audio services if admin. Continue?")) {
+        Log(L"Aggressive crackle repair cancelled.");
+        return;
+    }
+    Log(L"Running aggressive crackle repair...");
+    CrackleRepairAll();
+    SetExclusiveModeForDevices(AllDevices(), false);
+    ApplyLowLatencyPower();
+    RestartAudioServices();
+    Log(L"Aggressive crackle repair finished. Re-open apps that were playing or recording audio.");
+}
+
+static void OpenAudioTroubleshooter() {
+    HINSTANCE result = ShellExecuteW(g.hwnd, L"open", L"ms-settings:troubleshoot-other", nullptr, nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+        ShellExecuteW(g.hwnd, L"open", L"msdt.exe", L"/id AudioPlaybackDiagnostic", nullptr, SW_SHOWNORMAL);
+    }
+    Log(L"Opened Windows audio troubleshooter/settings.");
+}
+
+static void OpenDeviceManager() {
+    ShellExecuteW(g.hwnd, L"open", L"devmgmt.msc", nullptr, nullptr, SW_SHOWNORMAL);
+    Log(L"Opened Device Manager for audio/chipset/Bluetooth driver checks.");
+}
+
+static void OpenServicesPanel() {
+    ShellExecuteW(g.hwnd, L"open", L"services.msc", nullptr, nullptr, SW_SHOWNORMAL);
+    Log(L"Opened Services panel.");
+}
+
+static void OpenBluetoothSettings() {
+    ShellExecuteW(g.hwnd, L"open", L"ms-settings:bluetooth", nullptr, nullptr, SW_SHOWNORMAL);
+    Log(L"Opened Bluetooth settings. For bad Bluetooth crackle, disable Hands-Free Telephony in device services when available.");
+}
+
+static bool WriteUtf8File(const std::wstring& path, const std::wstring& content) {
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    const char bom[] = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF) };
+    DWORD written = 0;
+    WriteFile(file, bom, sizeof(bom), &written, nullptr);
+    int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (bytesNeeded > 1) {
+        std::vector<char> utf8(bytesNeeded);
+        WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, utf8.data(), bytesNeeded, nullptr, nullptr);
+        WriteFile(file, utf8.data(), bytesNeeded - 1, &written, nullptr);
+    }
+    CloseHandle(file);
+    return true;
+}
+
+enum class ButtonKind {
+    Neutral,
+    Primary,
+    Success,
+    Warning,
+    Danger,
+    Restore,
+    Panel
+};
+
+static ButtonKind ButtonKindForId(int id) {
+    switch (id) {
+    case IDC_APPLY_SELECTED:
+    case IDC_APPLY_OUT:
+    case IDC_APPLY_IN:
+    case IDC_APPLY_ALL:
+    case IDC_APPLY_VOLUME:
+    case IDC_DEFAULT_OUT:
+    case IDC_DEFAULT_IN:
+    case IDC_REFRESH:
+    case IDC_REFRESH_CONFIG:
+    case IDC_EXPORT_DEBUG:
+        return ButtonKind::Primary;
+    case IDC_CRACKLE_SAFE_SELECTED:
+    case IDC_CRACKLE_SAFE_ALL:
+    case IDC_PRESET_48:
+    case IDC_PRESET_44:
+    case IDC_FIX_CRACKLE:
+    case IDC_OPTIMIZE_SERVICES:
+    case IDC_LOW_LATENCY_POWER:
+    case IDC_PRO_TUNE:
+    case IDC_MMCSS_APPLY:
+    case IDC_DUCKING_OFF:
+    case IDC_UI_DELAY_APPLY:
+    case IDC_DISABLE_EFFECTS:
+    case IDC_ENABLE_EFFECTS:
+    case IDC_SHOW_SELECTED_DEVICES:
+    case IDC_EXCLUSIVE_ON_SELECTED:
+    case IDC_EXCLUSIVE_ON_ALL:
+        return ButtonKind::Success;
+    case IDC_CRACKLE_AGGRESSIVE:
+    case IDC_RESTART_AUDIO:
+    case IDC_HIDE_SELECTED_DEVICES:
+    case IDC_CLEAR_LOG:
+    case IDC_EXCLUSIVE_OFF_SELECTED:
+    case IDC_EXCLUSIVE_OFF_ALL:
+        return ButtonKind::Danger;
+    case IDC_RESTORE_TUNE:
+    case IDC_MMCSS_RESTORE:
+    case IDC_DUCKING_RESTORE:
+    case IDC_UI_DELAY_RESTORE:
+    case IDC_RESTORE_ALL_TWEAKS:
+    case IDC_EXCLUSIVE_RESTORE_SELECTED:
+    case IDC_RESET_SELECTED:
+        return ButtonKind::Restore;
+    case IDC_SOUND_PANEL:
+    case IDC_SOUND_SETTINGS:
+    case IDC_AUDIO_TROUBLESHOOTER:
+    case IDC_DEVICE_MANAGER:
+    case IDC_SERVICES_PANEL:
+    case IDC_BLUETOOTH_SETTINGS:
+    case IDC_OPEN_LOG:
+    case IDC_POWER_REPORT:
+        return ButtonKind::Panel;
+    case IDC_ADMIN:
+        return IsElevated() ? ButtonKind::Success : ButtonKind::Warning;
+    default:
+        return ButtonKind::Neutral;
+    }
+}
+
+static COLORREF ButtonFill(ButtonKind kind, bool hot, bool pressed) {
+    COLORREF base = kColorNeutral;
+    switch (kind) {
+    case ButtonKind::Primary: base = hot ? kColorPrimaryHover : kColorPrimary; break;
+    case ButtonKind::Success: base = kColorSuccess; break;
+    case ButtonKind::Warning: base = kColorWarning; break;
+    case ButtonKind::Danger: base = kColorDanger; break;
+    case ButtonKind::Restore: base = RGB(91, 103, 117); break;
+    case ButtonKind::Panel: base = RGB(214, 224, 235); break;
+    default: base = kColorNeutral; break;
+    }
+    if (pressed) {
+        BYTE r = static_cast<BYTE>(GetRValue(base) * 0.86);
+        BYTE gch = static_cast<BYTE>(GetGValue(base) * 0.86);
+        BYTE b = static_cast<BYTE>(GetBValue(base) * 0.86);
+        base = RGB(r, gch, b);
+    }
+    return base;
+}
+
+static bool ButtonUsesLightText(ButtonKind kind) {
+    return kind == ButtonKind::Primary || kind == ButtonKind::Success ||
+        kind == ButtonKind::Warning || kind == ButtonKind::Danger || kind == ButtonKind::Restore;
+}
+
+static void DrawOwnerButton(const DRAWITEMSTRUCT* dis) {
+    int id = static_cast<int>(dis->CtlID);
+    ButtonKind kind = ButtonKindForId(id);
+    bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+    bool focus = (dis->itemState & ODS_FOCUS) != 0;
+    bool disabled = (dis->itemState & ODS_DISABLED) != 0;
+
+    RECT rc = dis->rcItem;
+    HDC dc = dis->hDC;
+    COLORREF fill = disabled ? RGB(224, 228, 233) : ButtonFill(kind, false, pressed);
+    COLORREF border = disabled ? RGB(205, 211, 218) : (kind == ButtonKind::Neutral || kind == ButtonKind::Panel ? kColorBorder : fill);
+    HBRUSH brush = CreateSolidBrush(fill);
+    HPEN pen = CreatePen(PS_SOLID, 1, border);
+    HGDIOBJ oldBrush = SelectObject(dc, brush);
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    RoundRect(dc, rc.left, rc.top, rc.right, rc.bottom, 7, 7);
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(brush);
+    DeleteObject(pen);
+
+    wchar_t text[256]{};
+    GetWindowTextW(dis->hwndItem, text, 256);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, disabled ? RGB(128, 136, 145) : (ButtonUsesLightText(kind) ? RGB(255, 255, 255) : kColorText));
+    HFONT oldFont = reinterpret_cast<HFONT>(SelectObject(dc, g.fontBold ? g.fontBold : g.font));
+    RECT textRc = rc;
+    InflateRect(&textRc, -8, 0);
+    DrawTextW(dc, text, -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(dc, oldFont);
+
+    if (focus) {
+        RECT focusRc = rc;
+        InflateRect(&focusRc, -3, -3);
+        DrawFocusRect(dc, &focusRc);
+    }
+}
+
+static void ExportDebugReport() {
+    std::wstring path = ExeDirectoryPath() + L"\\AudioOptimizer-debug-report.txt";
+    std::wstringstream ss;
+    ss << L"Audio Optimizer Debug Report\r\n";
+    ss << L"Generated: " << NowText() << L"\r\n";
+    ss << L"Admin: " << (IsElevated() ? L"yes" : L"no") << L"\r\n";
+    ss << L"Log file: " << LogFilePath() << L"\r\n\r\n";
+    ss << L"Devices\r\n";
+    for (DeviceInfo* device : AllDevices()) {
+        ss << (device->flow == eRender ? L"Output: " : L"Input: ") << device->name << L"\r\n";
+        ss << L"  State: " << DeviceStateText(device->state) << L"\r\n";
+        ss << L"  Id: " << device->id << L"\r\n";
+        ss << L"  Device format: " << GetCurrentDeviceFormatText(*device) << L"\r\n";
+        ss << L"  Mix format: " << GetMixFormatText(*device) << L"\r\n";
+        ss << L"  Latency: " << GetLatencyText(*device) << L"\r\n";
+        ss << L"  Volume: " << GetVolumeText(*device) << L"\r\n";
+        ss << L"  Effects/APO: " << GetSysFxText(*device) << L"\r\n";
+        ss << L"  Exclusive mode: " << GetExclusiveModeText(*device) << L"\r\n\r\n";
+    }
+    if (WriteUtf8File(path, ss.str())) {
+        Log(L"Debug report exported: " + path);
+        ShellExecuteW(g.hwnd, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    } else {
+        Log(L"Debug report export failed: " + LastErrorText());
+    }
+}
+
+static void OpenLogFile() {
+    ShellExecuteW(g.hwnd, L"open", LogFilePath().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+static void ClearLogFile() {
+    if (g.log) SetWindowTextW(g.log, L"");
+    DeleteFileW(LogFilePath().c_str());
+    Log(L"Log cleared.");
+}
+
 static HWND MakeButton(HWND parent, const wchar_t* text, int id, int x, int y, int w, int h) {
-    HWND hwnd = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, x, y, w, h, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), nullptr, nullptr);
+    HWND hwnd = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW, x, y, w, h, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), nullptr, nullptr);
     TrackControl(hwnd);
     return hwnd;
 }
@@ -1456,7 +1859,10 @@ static void Layout(HWND hwnd) {
     ListView_SetColumnWidth(g.outputs, 0, listW - 8);
     ListView_SetColumnWidth(g.inputs, 0, listW - 8);
     MoveWindow(g.config, margin, 340, width - margin * 2, 118, TRUE);
-    MoveWindow(g.log, margin, 720, width - margin * 2, max(90, height - 732), TRUE);
+    int statusH = 28;
+    int logBottom = max(720, height - statusH - margin);
+    MoveWindow(g.log, margin, 720, width - margin * 2, max(90, logBottom - 720), TRUE);
+    if (g.status) MoveWindow(g.status, margin, height - statusH - 6, width - margin * 2, statusH, TRUE);
 }
 
 static void InitControls(HWND hwnd) {
@@ -1497,10 +1903,11 @@ static void InitControls(HWND hwnd) {
     g.freq = MakeCombo(hwnd, IDC_FREQ, 92, 488, 100, rates, 5, 1);
     g.bits = MakeCombo(hwnd, IDC_BITS, 202, 488, 80, bits, 3, 1);
     g.channels = MakeCombo(hwnd, IDC_CHANNELS, 292, 488, 80, channels, 2, 1);
-    MakeButton(hwnd, L"Apply selected", IDC_APPLY_SELECTED, 28, 524, 120, 28);
-    MakeButton(hwnd, L"Reset selected", IDC_RESET_SELECTED, 158, 524, 120, 28);
-    MakeButton(hwnd, L"Apply outputs", IDC_APPLY_OUT, 288, 524, 100, 28);
-    MakeButton(hwnd, L"Apply all", IDC_APPLY_ALL, 398, 524, 90, 28);
+    MakeButton(hwnd, L"Apply checked", IDC_APPLY_SELECTED, 28, 524, 110, 28);
+    MakeButton(hwnd, L"Reset checked", IDC_RESET_SELECTED, 148, 524, 110, 28);
+    MakeButton(hwnd, L"Outputs", IDC_APPLY_OUT, 268, 524, 76, 28);
+    MakeButton(hwnd, L"Inputs", IDC_APPLY_IN, 354, 524, 66, 28);
+    MakeButton(hwnd, L"All", IDC_APPLY_ALL, 430, 524, 58, 28);
 
     MakeGroup(hwnd, L"Selected device volume / effects", 528, 468, 500, 92);
     g.volume = CreateWindowW(TRACKBAR_CLASSW, L"", WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS, 548, 492, 230, 34, hwnd, MenuId(IDC_VOLUME), nullptr, nullptr);
@@ -1529,7 +1936,11 @@ static void InitControls(HWND hwnd) {
     MakeButton(hwnd, L"Power report", IDC_POWER_REPORT, 858, 638, 120, 30);
 
     g.log = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL, 12, 720, 1016, 150, hwnd, MenuId(IDC_LOG), nullptr, nullptr);
+    SendMessageW(g.log, WM_SETFONT, reinterpret_cast<WPARAM>(g.font), TRUE);
     g.commonControls.push_back(g.log);
+    g.status = CreateWindowW(L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE, 12, 864, 1016, 28, hwnd, nullptr, nullptr, nullptr);
+    SendMessageW(g.status, WM_SETFONT, reinterpret_cast<WPARAM>(g.fontBold ? g.fontBold : g.font), TRUE);
+    g.commonControls.push_back(g.status);
 
     g.createTab = 1;
     MakeGroup(hwnd, L"MMCSS / Multimedia Scheduler", 12, 50, 500, 140);
@@ -1565,6 +1976,19 @@ static void InitControls(HWND hwnd) {
     MakeButton(hwnd, L"Pro audio tune", IDC_PRO_TUNE, 412, 422, 140, 30);
     MakeButton(hwnd, L"Restore safe tuning", IDC_RESTORE_TUNE, 562, 422, 160, 30);
     MakeStatic(hwnd, L"Driver-specific items such as Loudness Equalization, Dolby/DTS, Realtek jack detection, Bluetooth AAC/HFP, and speaker layout must be exposed by the installed driver.", 32, 458, 940, 20);
+
+    MakeGroup(hwnd, L"Crackling repair / diagnostics", 12, 505, 1016, 185);
+    MakeButton(hwnd, L"Safe repair checked", IDC_CRACKLE_SAFE_SELECTED, 32, 538, 155, 30);
+    MakeButton(hwnd, L"Safe repair all", IDC_CRACKLE_SAFE_ALL, 197, 538, 130, 30);
+    MakeButton(hwnd, L"Aggressive repair", IDC_CRACKLE_AGGRESSIVE, 337, 538, 145, 30);
+    MakeButton(hwnd, L"Audio troubleshooter", IDC_AUDIO_TROUBLESHOOTER, 492, 538, 155, 30);
+    MakeButton(hwnd, L"Device Manager", IDC_DEVICE_MANAGER, 657, 538, 130, 30);
+    MakeButton(hwnd, L"Bluetooth settings", IDC_BLUETOOTH_SETTINGS, 797, 538, 145, 30);
+    MakeButton(hwnd, L"Services", IDC_SERVICES_PANEL, 32, 582, 100, 30);
+    MakeButton(hwnd, L"Open log", IDC_OPEN_LOG, 142, 582, 100, 30);
+    MakeButton(hwnd, L"Clear log", IDC_CLEAR_LOG, 252, 582, 100, 30);
+    MakeButton(hwnd, L"Export debug report", IDC_EXPORT_DEBUG, 362, 582, 160, 30);
+    MakeStatic(hwnd, L"Safe repair applies stable 48 kHz / 24-bit, disables endpoint effects, disables ducking, and optimizes services when admin. Aggressive also disables exclusive mode, applies low-latency power, and restarts audio services.", 32, 628, 940, 42);
 
     g.createTab = 0;
     ShowTab(0);
@@ -1652,6 +2076,16 @@ static void HandleCommand(HWND, WPARAM wParam) {
     case IDC_UI_DELAY_APPLY: ApplyUiDelayTweak(); break;
     case IDC_UI_DELAY_RESTORE: RestoreUiDelayTweak(); break;
     case IDC_RESTORE_ALL_TWEAKS: RestoreAppRegistryTweaks(); break;
+    case IDC_CRACKLE_SAFE_SELECTED: CrackleRepairSelected(); break;
+    case IDC_CRACKLE_SAFE_ALL: CrackleRepairAll(); break;
+    case IDC_CRACKLE_AGGRESSIVE: CrackleRepairAggressive(); break;
+    case IDC_AUDIO_TROUBLESHOOTER: OpenAudioTroubleshooter(); break;
+    case IDC_DEVICE_MANAGER: OpenDeviceManager(); break;
+    case IDC_SERVICES_PANEL: OpenServicesPanel(); break;
+    case IDC_BLUETOOTH_SETTINGS: OpenBluetoothSettings(); break;
+    case IDC_OPEN_LOG: OpenLogFile(); break;
+    case IDC_CLEAR_LOG: ClearLogFile(); break;
+    case IDC_EXPORT_DEBUG: ExportDebugReport(); break;
     case IDC_SOUND_PANEL:
         ShellExecuteW(g.hwnd, L"open", L"mmsys.cpl", nullptr, nullptr, SW_SHOWNORMAL);
         break;
@@ -1666,6 +2100,8 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_CREATE:
         g.hwnd = hwnd;
         InitControls(hwnd);
+        Log(L"Audio Optimizer started. Log file: " + LogFilePath());
+        Log(IsElevated() ? L"Process is running as administrator." : L"Process is not elevated. Admin-only repairs will log and skip protected changes.");
         RefreshDevices();
         return 0;
     case WM_SIZE:
@@ -1678,6 +2114,34 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_COMMAND:
         HandleCommand(hwnd, wParam);
         return 0;
+    case WM_DRAWITEM:
+        if (wParam >= 1001) {
+            DrawOwnerButton(reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
+            return TRUE;
+        }
+        break;
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        HWND control = reinterpret_cast<HWND>(lParam);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, control == g.status ? RGB(255, 255, 255) : kColorText);
+        if (control == g.status) return reinterpret_cast<LRESULT>(GetStockObject(DKGRAY_BRUSH));
+        return reinterpret_cast<LRESULT>(g.brushWindow ? g.brushWindow : GetStockObject(WHITE_BRUSH));
+    }
+    case WM_CTLCOLOREDIT:
+    {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(dc, kColorText);
+        SetBkColor(dc, RGB(249, 251, 253));
+        return reinterpret_cast<LRESULT>(g.brushEdit ? g.brushEdit : GetStockObject(WHITE_BRUSH));
+    }
+    case WM_CTLCOLORBTN:
+    {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetBkMode(dc, TRANSPARENT);
+        return reinterpret_cast<LRESULT>(g.brushWindow ? g.brushWindow : GetStockObject(WHITE_BRUSH));
+    }
     case WM_NOTIFY:
         if (reinterpret_cast<NMHDR*>(lParam)->hwndFrom == g.tabs &&
             reinterpret_cast<NMHDR*>(lParam)->code == TCN_SELCHANGE) {
@@ -1696,6 +2160,12 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         }
         break;
     case WM_DESTROY:
+        if (g.font) DeleteObject(g.font);
+        if (g.fontBold) DeleteObject(g.fontBold);
+        if (g.fontTitle) DeleteObject(g.fontTitle);
+        if (g.brushWindow) DeleteObject(g.brushWindow);
+        if (g.brushPanel) DeleteObject(g.brushPanel);
+        if (g.brushEdit) DeleteObject(g.brushEdit);
         PostQuitMessage(0);
         return 0;
     }
@@ -1713,7 +2183,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
     wc.hInstance = instance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    InitVisuals();
+    wc.hbrBackground = g.brushWindow ? g.brushWindow : reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wc.lpszClassName = L"AudioOptimizerNativeWindow";
     RegisterClassW(&wc);
 

@@ -1,0 +1,108 @@
+﻿[2026-04-30 21:45:27.813] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 21:45:27.815] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 21:45:27.855] Devices refreshed.
+[2026-04-30 21:51:50.027] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 21:51:50.027] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 21:51:50.134] Devices refreshed.
+[2026-04-30 21:55:28.233] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 21:55:28.235] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 21:55:28.279] Devices refreshed.
+[2026-04-30 21:55:53.742] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 21:55:53.744] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 21:55:53.798] Devices refreshed.
+[2026-04-30 21:56:34.928] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 21:56:34.928] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 21:56:34.977] Devices refreshed.
+[2026-04-30 21:57:11.490] Devices refreshed.
+[2026-04-30 21:57:48.124] Opened Bluetooth settings. For bad Bluetooth crackle, disable Hands-Free Telephony in device services when available.
+[2026-04-30 21:57:52.027] Opened Device Manager for audio/chipset/Bluetooth driver checks.
+[2026-04-30 21:57:55.149] Opened Windows audio troubleshooter/settings.
+[2026-04-30 21:58:05.805] Opened Services panel.
+[2026-04-30 21:59:46.072] Applying 48000 Hz / 24-bit / 2 channel(s) to outputs...
+[2026-04-30 21:59:46.078] Driver reports shared-mode support: Voicemeeter In 1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:46.098] Updated: Voicemeeter In 1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:46.104] Driver reports shared-mode support: Voicemeeter In 2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:46.126] Updated: Voicemeeter In 2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:46.131] Driver reports shared-mode support: Headphones (JBL TUNE 310C USB-C)
+[2026-04-30 21:59:47.156] Updated: Headphones (JBL TUNE 310C USB-C)
+[2026-04-30 21:59:47.160] Skipped inactive device: Headphones (3- Realtek(R) Audio)
+[2026-04-30 21:59:47.168] Driver suggested closest shared format for Voicemeeter AUX Input (VB-Audio Voicemeeter VAIO): 48000 Hz / 32-bit / 1 channel(s). Trying selected Windows endpoint format anyway.
+[2026-04-30 21:59:47.195] Updated: Voicemeeter AUX Input (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.199] Skipped inactive device: LED  MONITOR (3- HD Audio Driver for Display Audio)
+[2026-04-30 21:59:47.204] Driver reports shared-mode support: Voicemeeter In 5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.226] Updated: Voicemeeter In 5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.232] Driver reports shared-mode support: Voicemeeter In 4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.253] Updated: Voicemeeter In 4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.259] Driver reports shared-mode support: Voicemeeter Input (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.291] Updated: Voicemeeter Input (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.405] Driver reports shared-mode support: Speakers (3- Realtek(R) Audio)
+[2026-04-30 21:59:47.417] Windows rejected this endpoint format for Speakers (3- Realtek(R) Audio): 0x88890008
+[2026-04-30 21:59:47.421] Driver reports shared-mode support: Voicemeeter VAIO3 Input (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.441] Updated: Voicemeeter VAIO3 Input (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.447] Driver reports shared-mode support: Voicemeeter In 3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.468] Updated: Voicemeeter In 3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.476] Applying 48000 Hz / 16-bit / 2 channel(s) to inputs...
+[2026-04-30 21:59:47.486] Driver reports shared-mode support: Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)
+[2026-04-30 21:59:47.585] Updated: Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)
+[2026-04-30 21:59:47.590] Driver reports shared-mode support: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.612] Updated: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.616] Driver reports shared-mode support: Voicemeeter Out A3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.636] Updated: Voicemeeter Out A3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.641] Driver reports shared-mode support: Voicemeeter Out A1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.662] Updated: Voicemeeter Out A1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.665] Skipped inactive device: Microphone (3- Realtek(R) Audio)
+[2026-04-30 21:59:47.669] Driver suggested closest shared format for Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO): 48000 Hz / 32-bit / 1 channel(s). Trying selected Windows endpoint format anyway.
+[2026-04-30 21:59:47.690] Updated: Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.693] Skipped inactive device: Stereo Mix (3- Realtek(R) Audio)
+[2026-04-30 21:59:47.696] Driver reports shared-mode support: Voicemeeter Out A4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.718] Updated: Voicemeeter Out A4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.722] Driver reports shared-mode support: Voicemeeter Out A2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.744] Updated: Voicemeeter Out A2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.748] Driver reports shared-mode support: Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.769] Updated: Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.772] Driver reports shared-mode support: Microphone (JBL TUNE 310C USB-C)
+[2026-04-30 21:59:47.783] Windows rejected this endpoint format for Microphone (JBL TUNE 310C USB-C): 0x88890008
+[2026-04-30 21:59:47.786] Driver reports shared-mode support: Voicemeeter Out A5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 21:59:47.808] Updated: Voicemeeter Out A5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:00:08.800] Devices refreshed.
+[2026-04-30 22:01:45.370] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 22:01:45.372] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 22:01:45.419] Devices refreshed.
+[2026-04-30 22:02:05.162] Audio Optimizer started. Log file: F:\aaaaaaaaaaa\audio optimizer\dist\AudioOptimizer.log
+[2026-04-30 22:02:05.165] Process is not elevated. Admin-only repairs will log and skip protected changes.
+[2026-04-30 22:02:05.246] Devices refreshed.
+[2026-04-30 22:02:13.052] Applying 48000 Hz / 24-bit / 2 channel(s) to inputs...
+[2026-04-30 22:02:13.185] Driver reports shared-mode support: Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)
+[2026-04-30 22:02:13.243] Windows rejected this endpoint format for Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones): 0x88890008
+[2026-04-30 22:02:13.250] Driver reports shared-mode support: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.274] Updated: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.278] Driver reports shared-mode support: Voicemeeter Out A3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.306] Updated: Voicemeeter Out A3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.310] Driver reports shared-mode support: Voicemeeter Out A1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.335] Updated: Voicemeeter Out A1 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.338] Skipped inactive device: Microphone (3- Realtek(R) Audio)
+[2026-04-30 22:02:13.340] Driver reports shared-mode support: Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.364] Updated: Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.367] Skipped inactive device: Stereo Mix (3- Realtek(R) Audio)
+[2026-04-30 22:02:13.370] Driver reports shared-mode support: Voicemeeter Out A4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.390] Updated: Voicemeeter Out A4 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.395] Driver reports shared-mode support: Voicemeeter Out A2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.418] Updated: Voicemeeter Out A2 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.423] Driver reports shared-mode support: Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.444] Updated: Voicemeeter Out B3 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.473] Driver reports shared-mode support: Microphone (JBL TUNE 310C USB-C)
+[2026-04-30 22:02:13.482] Windows rejected this endpoint format for Microphone (JBL TUNE 310C USB-C): 0x88890008
+[2026-04-30 22:02:13.484] Driver reports shared-mode support: Voicemeeter Out A5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.506] Updated: Voicemeeter Out A5 (VB-Audio Voicemeeter VAIO)
+[2026-04-30 22:02:13.507] Format apply summary for inputs: updated 8, skipped 2, failed 2.
+[2026-04-30 22:02:49.963] Applying selected format to Voicemeeter AUX Input (VB-Audio Voicemeeter VAIO): 48000 Hz / 24-bit / 1 channel(s)
+[2026-04-30 22:02:49.966] Driver suggested closest shared format: 48000 Hz / 32-bit / 2 channel(s). Trying selected Windows endpoint format anyway.
+[2026-04-30 22:02:49.983] Selected device format updated.
+[2026-04-30 22:02:49.994] Applying selected format to Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO): 48000 Hz / 24-bit / 2 channel(s)
+[2026-04-30 22:02:49.998] Driver reports shared-mode support for selected device.
+[2026-04-30 22:02:50.022] Selected device format updated.
+[2026-04-30 22:02:55.749] Devices refreshed.
+[2026-04-30 22:03:02.691] Devices refreshed.
+[2026-04-30 22:03:15.095] Applying selected format to Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO): 48000 Hz / 24-bit / 1 channel(s)
+[2026-04-30 22:03:15.098] Driver suggested closest shared format: 48000 Hz / 32-bit / 2 channel(s). Trying selected Windows endpoint format anyway.
+[2026-04-30 22:03:15.123] Selected device format updated.

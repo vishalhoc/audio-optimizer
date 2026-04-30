@@ -23,7 +23,7 @@ $cmd = @"
 call "$vcvars"
 cd /d "$root"
 rc /nologo /fo "$out\resource.res" resource.rc
-cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /MT /O2 AudioOptimizer.cpp "$out\resource.res" /link /SUBSYSTEM:WINDOWS /OUT:"$out\AudioOptimizer.exe" user32.lib comctl32.lib ole32.lib propsys.lib shell32.lib advapi32.lib
+cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /MT /O2 AudioOptimizer.cpp "$out\resource.res" /link /SUBSYSTEM:WINDOWS /OUT:"$out\AudioOptimizer.exe" user32.lib gdi32.lib comctl32.lib ole32.lib propsys.lib shell32.lib advapi32.lib powrprof.lib
 "@
 $cmd | Set-Content -Encoding ASCII -Path (Join-Path $out "build.cmd")
 
